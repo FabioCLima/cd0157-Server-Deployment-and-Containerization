@@ -1,0 +1,135 @@
+Deployment to Kubernetes using CodePipeline and CodeBuild
+
+You will now create a pipeline that watches your Github and deploys your application using CodePipeline and CodeBuild. When changes are pushed to the repo, it will build a new image and deploy it to your EKS cluster. Follow the steps below to complete your project.
+
+1. Generate a Github access token
+A Github access token will allow Codebuild to monitor when a repo is changed. A token is analogous to your Github password and can be generated here(opens in a new tab). You should generate the token with full control of private repositories, as shown in the image below. Be sure to save the token somewhere that is secure.
+
+Generate GitHub Access Token with full control of private repositories
+
+Once you create a personal access token, you can share this with any service (such as AWS CloudFormation) to allow accessing the repositories under your Github account.
+
+2. Create Codebuild and CodePipeline resources using CloudFormation template
+2.1. Modify the template
+There is a file named ci-cd-codepipeline.cfn.yml provided in your starter repo. This is the template file that you will use to create your CodePipeline pipeline and CodeBuild project Open this file, and go to the 'Parameters' section. These are parameters that will accept values when you create a stack. Ensure that the following values are used for the parameter variables:
+
+|Parameter|Possible Value| |---|---|---| |EksClusterName|simple-jwt-api
+Name of the EKS cluster you created | |GitSourceRepo|cd0157-Server-Deployment-and-Containerization
+Github repo name| |GitBranch|master
+Or any other you want to link to the Pipeline| |GitHubUser|Your Github username| |KubectlRoleName|UdacityFlaskDeployCBKubectlRole
+We created this role earlier|
+
+**Did you notice that we haven't saved the GitHubToken in this file?** Do not use any quotes in your values, as shown in the snapshot below. Save the changes you've made.
+Update your Github username in the template file
+
+2.2. Review the resources
+Review the resources that will be created using this ci-cd-codepipeline.cfn.yml file. The Cloudformation template file ci-cd-codepipeline.cfn.yml will create the following resources:
+
+ECR repository to store your Docker image.
+S3 bucket to store your Pipeline artifacts
+A few IAM roles that individual services will assume
+A Lambda function
+CodeBuild and CodePipeline resources
+
+2.3. Create Stack
+Use the AWS web-console to create a stack for CodePipeline using the CloudFormation template file ci-cd-codepipeline.cfn.yml. Go to the CloudFormation service(opens in a new tab) in the AWS console. Press the Create Stack button. It will make you go through the following three steps -
+
+Specify template - Choose the options "Template is ready" and "Upload a template file" to upload the template file ci-cd-codepipeline.cfn.yml. Click the 'Next' button.
+Create stack - Step 1 - Specify template
+
+Specify stack details - Give the stack a name. You will have a few fileds auto-populated from the parameters used in the ci-cd-codepipeline.cfn.yml file. Fill in your GitHub access token generated in the previous step. Ensure that the Github repo name, IAM role, and EKS cluster name matches with the ones you created earlier.
+
+Configure stack options - Leave default, and create the stack. You can check the stack status in the CloudFormation console. It will take some time (5-15 mins) to create the stack. After the successful creation of the stack, you can see the CodeBuild and CodePipeline resources get created for you. In addition, the Cloudformation template will create a few more resources, such as an S3 bucket, a Lambda function, and others.
+
+
+Troubleshoot
+If there is an indentation error in your YAML template file, the CloudFormation will raise a "Template format error". In such a case, you will have to identify the line of error in the template, using any external tools, such as - YAML Validator(opens in a new tab) or YAML Lint(opens in a new tab).
+Stack in the CloudFormation console that will create the Codebuild and Codepipeline resources
+
+3. Save a Secret in AWS Parameter Store
+You app running in the EKS cluster will need a secret text string for creating the JWT (Remember the /auth endpoint?). We need a way to pass your text secret to the app in kubernetes securly. You will be using AWS Parameter Store(opens in a new tab) to do this.
+
+Run this command from the project home directory to put secret into AWS Parameter Store
+
+aws ssm put-parameter --name JWT_SECRET --overwrite --value "myjwtsecret" --type SecureString
+## Verify
+aws ssm get-parameter --name JWT_SECRET
+Once you submit your project and receive the reviews, you can consider deleting the variable from parameter-store using:
+
+aws ssm delete-parameter --name JWT_SECRET
+4. How does CodeBuild know the build steps?
+In the previous step, the CloudFormation template file, ci-cd-codepipeline.cfn.yml, will automatically create a CodeBuild resource. When the build will trigger, Codebuild will execute the commands/steps mentioned in the buildspec.yml file.
+
+As per AWS documentation, a buildspec is a collection of build commands and related settings, in YAML format, that CodeBuild uses to run a build.
+
+The CodeBuild expects the build specification in the buildspec.yml. This file must be placed in the root of your source directory (Github repo).
+
+4.1. Configuring buildspec.yml
+In the buildspec.yml file, use the same (or within one minor version difference) KUBECTL version as you've used while creating an EKS cluster. You can run kubectl version --short --client in your local terminal to check the version locally. To change the version in the buildspec.yml file, change this line(opens in a new tab) in the buildspec.yml with a specific version of your choice. Refer to the AWS docs(opens in a new tab) or k8s docs(opens in a new tab) to see the available versions for Linux machines (our Codebuild will use Linux containers internally to run build commands!).
+
+Note - You must use a kubectl version within one minor version difference of your Amazon EKS cluster control plane. For example, a 1.21 kubectl client works with Kubernetes 1.20, 1.21, and 1.22 clusters.
+
+Also, ensure that the following code is present at the end of the buildspec.yml(opens in a new tab) file:
+
+env:
+  parameter-store:         
+    JWT_SECRET: JWT_SECRET
+This lets CodeBuild know to set an environment variable based on a value in the parameter-store.
+
+4.2. Details of the buildspec.yml
+The buildspec.yml file specifies the different phases of a build, such as an install, pre-build, build, and post-build. Each phase has a set of commands to be automatically executed by CodeBuild.
+
+install phase: Install Python, pip, kubectl, and update the system path
+pre-build phase: Log into the ECR repo where the Codebuils will push the Docker image.
+build phase: Build a Docker image
+post-build phase: Push the Docker image to the ECR repo, update the EKS cluster's kubeconfig, and apply the configuration defined in the simple_jwt_api.yml to the cluster.
+You can see each command being executed in the CodeBuild log console when you trigger a build.
+
+5. Troubleshoot - How to debug a failed build?
+When a build fails, you can look at the logs to see the errors. Here is a popular error:
+
+Error: You must be logged in to the server (the server has asked for the client to provide credentials)
+
+The error above infers that the Codebuild could not log into the cluster, possibly because Codebuild does not have sufficient permissions to perform the logging action. In this case, you should check and re-update the cluster's ConfigMap as:
+
+## Download a fresh copy of the configmap
+## You can choose a different path or current working directory to save the  auth-patch.yml
+kubectl get -n kube-system configmap/aws-auth -o yaml > /tmp/aws-auth-patch.yml
+## Open the configmap in an editor, and update the **data --> mapRoles** section as described earlier while creating the cluster
+## Update the configmap
+kubectl patch configmap/aws-auth -n kube-system --patch "$(cat /tmp/aws-auth-patch.yml)"
+Another prevalent error is:
+
+Build failed to start. The following error occurred: ArtifactsOverride must be set when using artifacts type CodePipelines
+
+The error above could be due to the incorrect parameters used in the ci-cd-codepipeline.cfn.yml file. To verify the existing parameters, look at the CloudFormation console → your Stack → Stack parameters.
+
+6. The Working Project
+You will not be able to trigger a manual build because the Codebuild is set to use the CodePipeline artifact. Triggering it manually may lead to this error:
+
+Build failed to start. The following error occurred: ArtifactsOverride must be set when using artifacts type CodePipelines
+
+A workaround for a manual build is: Go to the CodePipeline console → your Pipeline → click on the Release change button. However, we recommend the automatic builds. Try the steps below to test the automatic builds:
+
+Push a commit - To check if the pipeline works, Make a git push to your repository to trigger an automatic build as:
+## Verify the remote destination. 
+## It should point to the repo in your account (not the repo in the Udacity account). 
+## Otherwise, FORK the Udacity repo, and then clone it locally
+git remote -v
+## Make the changes locally
+git status
+## Add the changed file to the Git staging area
+git add <filename>
+## Provide a meaningful commit description
+git commit -m “my comment“
+## Push to the local master branch to the remote master branch
+git push
+Verify - In the AWS console go to the CodePipeline dashboard(opens in a new tab). You should see that the build is running, and it should succeed.
+Test your Endpoint - To test your API endpoints, get the external IP for your service:
+
+kubectl get services simple-jwt-api -o wide
+Now use the external IP url to test the app:
+
+export TOKEN=`curl -d '{"email":"<EMAIL>","password":"<PASSWORD>"}' -H "Content-Type: application/json" -X POST <EXTERNAL-IP URL>/auth  | jq -r '.token'`
+curl --request GET '<EXTERNAL-IP URL>/contents' -H "Authorization: Bearer ${TOKEN}" | jq 
+Save the external IP from above to provide to the reviewer when you will submit your project.

@@ -237,6 +237,7 @@ Use the AWS web-console to create a stack for CodePipeline using the CloudFormat
 Specify template - Choose the options "Template is ready" and "Upload a template file" to upload the template file ci-cd-codepipeline.cfn.yml. Click the 'Next' button.
 
 The Working Project
+
 You will not be able to trigger a manual build because the Codebuild is set to use the CodePipeline artifact. Triggering it manually may lead to this error:
 
 Build failed to start. The following error occurred: ArtifactsOverride must be set when using artifacts type CodePipelines
@@ -258,3 +259,20 @@ git commit -m “my comment“
 git push
 
 Verify - In the AWS console go to the CodePipeline dashboard(opens in a new tab). You should see that the build is running, and it should succeed.
+
+Troubleshoot - How to debug a failed build?
+When a build fails, you can look at the logs to see the errors. Here is a popular error:
+
+Error: You must be logged in to the server (the server has asked for the client to provide credentials)
+The error above infers that the Codebuild could not log into the cluster, possibly because Codebuild does not have sufficient permissions to perform the logging action. In this case, you should check and re-update the cluster's ConfigMap as:
+
+## Download a fresh copy of the configmap
+## You can choose a different path or current working directory to save the  auth-patch.yml
+kubectl get -n kube-system configmap/aws-auth -o yaml > /tmp/aws-auth-patch.yml
+## Open the configmap in an editor, and update the **data --> mapRoles** section as described earlier while creating the cluster
+## Update the configmap
+kubectl patch configmap/aws-auth -n kube-system --patch "$(cat /tmp/aws-auth-patch.yml)"
+Another prevalent error is:
+
+Build failed to start. The following error occurred: ArtifactsOverride must be set when using artifacts type CodePipelines
+The error above could be due to the incorrect parameters used in the ci-cd-codepipeline.cfn.yml file. To verify the existing parameters, look at the CloudFormation console → your Stack → Stack parameters.1
