@@ -133,3 +133,21 @@ Now use the external IP url to test the app:
 export TOKEN=`curl -d '{"email":"<EMAIL>","password":"<PASSWORD>"}' -H "Content-Type: application/json" -X POST <EXTERNAL-IP URL>/auth  | jq -r '.token'`
 curl --request GET '<EXTERNAL-IP URL>/contents' -H "Authorization: Bearer ${TOKEN}" | jq 
 Save the external IP from above to provide to the reviewer when you will submit your project.
+
+### Adding Tests to the Build
+The final part of this project involves adding tests to your deployment. You can follow the steps below to accomplish this.
+
+Add running tests as part of the build. To require the unit tests to pass before our build will deploy new code to your cluster, you will add the tests to the build stage. Remember you installed the requirements and ran the unit tests locally at the beginning of this project. You will add the same commands to the buildspec.yml:
+Open buildspec.yml
+In the prebuild section, add a line to install the requirements and a line to run the tests. You may need to refer to 'pip' as 'pip3' and 'python' as 'python3', as:
+pre_build:
+pre_build:
+  commands:
+    - pip3 install -r requirements.txt 
+    - python -m pytest test_main.py
+
+You can check the tests prevent a bad deployment by breaking the tests on purpose:
+Open the test_main.py file
+Add assert False to any of the tests
+Commit your code and push it to Github
+Check that the build fails in CodePipeline

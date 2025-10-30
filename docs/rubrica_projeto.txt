@@ -1,0 +1,50 @@
+Rubrica
+Use esta rubrica do projeto para entender e avaliar os critérios do projeto.
+
+Running Locally and Containerization
+The student has set up a Dockerfile correctly.
+
+The Dockerfile should compile locally using Docker.
+
+The Docker file should contain the correct commands.
+
+The Docker file should contain the commands needed to install requirements and run the app using a Gunicorn server.
+
+Use the python:stretch image as a source image
+Define an entrypoint which will run the main app using the Gunicorn WSGI server. The Gunicorn should run with the arguments as follows: ["gunicorn", "-b", ":8080", "main:APP"].
+
+The Docker image should run and endpoints respond.
+
+The image runs correctly and the three endpoints work as per the README instructions.
+The student set the required environment variable
+
+The environment variable JWT_SECRET that is needed to run the app is correctly set in a file.
+
+Using CodePipeline and CodeBuild to Deploy
+Critérios	Requisitos de Envio
+The student set the buildspec to use the variable JWT_SECRET from the parameter store.
+
+The buildspec should tell CodeBuild to get the variable from the parameter store.
+
+The student set default values in the CodePipeline template.
+
+The default values for the EKS cluster name, GitHub source repo, GitHub user, and kubectl role should be set.
+
+The student provided an external IP for their service.
+
+The external IP is submitted by the student in the reviewer notes for the project.
+
+The API successfully runs from EKS.
+
+Using the ELB url, the endpoints for the API respond as expected.
+
+Setting Up CodeBuild to Run Test
+Critérios	Requisitos de Envio
+The student added running the tests to CodeBuild.
+
+The appropriate lines have been added to the buildspec.yml file.
+
+Sugestões para Destacar Seu Projeto
+Add additional endpoints to your Flask App
+Add custom alert messages with more specific CI/CD pipeline failure reasons.
+
