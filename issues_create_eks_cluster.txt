@@ -1,0 +1,172 @@
+================================================================================
+ISSUES FOUND WHILE CREATING THE EKS CLUSTER
+Project: cd0157-Server-Deployment-and-Containerization
+Date: 2025-10-30
+================================================================================
+
+CONTEXT:
+--------
+I am using my own AWS account (Account ID: 903180158771) to complete the
+Udacity Server Deployment and Containerization project.
+
+Region in use: us-east-2
+Installed and configured tools:
+  - AWS CLI: 2.31.24
+  - eksctl: 0.215.0
+  - kubectl: v1.34.1
+
+================================================================================
+ISSUES ENCOUNTERED:
+================================================================================
+
+1. UNSUPPORTED KUBERNETES VERSION
+---------------------------------
+Course instruction command:
+  eksctl create cluster --name simple-jwt-api --nodes=2 --version=1.22 \
+    --instance-types=t2.medium --region=us-east-2
+
+Error received:
+  "invalid version, 1.22 is no longer supported"
+
+Currently supported versions: 1.28, 1.29, 1.30, 1.31, 1.32, 1.33, 1.34
+
+Action taken:
+  I tried using versions 1.28 and 1.30
+
+
+2. CLUSTER EXISTS BUT HAS NO NODEGROUPS
+---------------------------------------
+Current status:
+  - Cluster "simple-jwt-api" already exists and is ACTIVE
+  - Cluster version: 1.30
+  - VPC: vpc-0a5ac0110a758f66d
+  - However, there are NO active nodegroups
+
+Verification commands:
+  eksctl get cluster --name simple-jwt-api --region us-east-2
+  eksctl get nodegroup --cluster simple-jwt-api --region us-east-2
+
+Result: "No nodegroups found"
+
+
+3. FAILED TO CREATE NODEGROUP - FREE TIER RESTRICTION
+-----------------------------------------------------
+Attempt to create nodegroup:
+  eksctl create nodegroup --cluster=simple-jwt-api --region=us-east-2 \
+    --name=simple-jwt-api-nodes --node-type=t2.medium --nodes=2
+
+CloudFormation error:
+  "Could not launch On-Demand Instances. InvalidParameterCombination -
+   The specified instance type is not eligible for Free Tier.
+   For a list of Free Tier instance types, run 'describe-instance-types'
+   with the filter 'free-tier-eligible=true'."
+
+Details:
+  - The stack remained in CREATE_IN_PROGRESS for ~26 minutes
+  - Then rolled back to ROLLBACK_COMPLETE
+  - Stack name: eksctl-simple-jwt-api-nodegroup-simple-jwt-api-nodes
+  - Error indicates t2.medium is not Free Tier eligible
+
+Note:
+  The course instructions specify t2.medium, but my AWS account under
+  Free Tier does not allow this instance type.
+
+
+4. EKSCTL TIMEOUT
+------------------
+During nodegroup creation, the eksctl command timed out after ~26 minutes,
+but CloudFormation kept processing in the background until it failed.
+
+Messages:
+  "exceeded max wait time for StackCreateComplete waiter"
+  "failed to create nodegroups for cluster 'simple-jwt-api'"
+
+
+================================================================================
+COMMANDS EXECUTED SUCCESSFULLY:
+================================================================================
+
+✓ AWS CLI and kubeconfig configuration:
+  aws eks update-kubeconfig --name simple-jwt-api --region us-east-2
+
+✓ IAM Role for CodeBuild created and configured:
+  - Role: UdacityFlaskDeployCBKubectlRole
+  - ARN: arn:aws:iam::903180158771:role/UdacityFlaskDeployCBKubectlRole
+  - Trust policy updated with correct Account ID
+  - eks-describe policy attached successfully
+
+
+================================================================================
+QUESTIONS FOR THE REVIEWER/INSTRUCTOR:
+================================================================================
+
+1. Which instance type should I use given Free Tier restrictions?
+   - Is t2.micro sufficient for this project?
+   - Can I use t3.small instead of t2.medium?
+
+2. Should I delete the existing cluster and recreate it from scratch, or can I
+   just add nodegroups to the current cluster (version 1.30)?
+
+3. The instructions mention Kubernetes 1.22, which is no longer available.
+   Will using version 1.28 or 1.30 impact subsequent steps in the project?
+
+4. Is there any special configuration required for personal AWS accounts
+   (not provided by the course)?
+
+5. Can the project be completed within AWS Free Tier limits?
+
+
+================================================================================
+CURRENT ENVIRONMENT STATE:
+================================================================================
+
+EKS Cluster:
+  - Name: simple-jwt-api
+  - Status: ACTIVE
+  - Region: us-east-2
+  - Version: 1.30
+  - Nodegroups: 0 (none active)
+
+IAM Role:
+  - Name: UdacityFlaskDeployCBKubectlRole
+  - Status: Correctly configured
+  - Policies: eks-describe attached
+
+Current blocker:
+  - Unable to create nodegroups due to instance type restriction
+  - Without nodegroups, I cannot deploy the application to the cluster
+
+
+================================================================================
+RELEVANT LOGS:
+================================================================================
+
+CloudFormation Stack Events (failure):
+Timestamp: 2025-10-30T12:02:12.018000+00:00
+ResourceType: AWS::EKS::Nodegroup
+ResourceStatusReason:
+  "Resource handler returned message: [Issue(Code=AsgInstanceLaunchFailures,
+   Message=Could not launch On-Demand Instances.
+   InvalidParameterCombination - The specified instance type is not eligible
+   for Free Tier. For a list of Free Tier instance types, run
+   'describe-instance-types' with the filter 'free-tier-eligible=true'.
+   Launching EC2 instance failed.,
+   ResourceIds=[eks-simple-jwt-api-nodes-78cd1a70-68be-6119-3320-54bb9a6b01fe])]"
+
+
+================================================================================
+ADDITIONAL INFORMATION:
+================================================================================
+
+- I am following the instructions from project_instructions.txt
+- Configuration files in the repository:
+  * trust.json (updated with correct Account ID)
+  * iam-role-policy.json (as per instructions)
+  * Dockerfile
+  * buildspec.yml
+  * simple_jwt_api.yml
+
+- AWS Account: Personal (not provided by the course)
+- Billing: Free Tier
+
+================================================================================

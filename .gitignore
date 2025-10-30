@@ -1,3 +1,53 @@
+# Python bytecode and cache
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Virtual environments
+.venv/
+venv/
+ENV/
+env/
+
+# Environment and secrets
+.env
+.env_*
+.env.*
+.envrc
+.envrc.local
+.secrets*
+.env_file
+
+# Packaging / distribution
+build/
+dist/
+*.egg-info/
+pip-wheel-metadata/
+
+# Test & coverage
+.pytest_cache/
+.coverage
+.coverage.*
+coverage.xml
+htmlcov/
+
+# Linters / type checkers
+.mypy_cache/
+.ruff_cache/
+pyrightconfig.json
+
+# Editor & OS
+.DS_Store
+.idea/
+.vscode/
+Thumbs.db
+
+# Logs
+*.log
+
+# UV / Python version pin (ignore if you don't want to commit it)
+.python-version
+
 .DS_Store
 .env*
 .flaskenv
