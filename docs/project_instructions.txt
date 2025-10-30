@@ -1,0 +1,260 @@
+Project Overview
+The prime objective of this project is to create a CI/CD pipeline. You will associate the pipeline's one end to your Github repository, and connect the other end to the EKS cluster. You will create this CI/CD pipeline programmatically using the code (Cloudformation template file) that we will provide to you.
+
+The subsequent pages of this lesson will guide you to create an and EKS cluster using a single command, AWS CodeBuild and CodePipeline programmatically using a CloudFormation template available to you.
+
+The diagram above shows the various stages of the Pipeline. The actions marked as 1, 2, 3, and 4 signify the following:
+
+Code check-in - The application code for the Flask app is hosted on Github. Multiple contributors can contribute to the repository collaboratively.
+
+Trigger Build - As soon as a commit happens in the Github repository, it will trigger the CodeBuild. This step requires connecting your Github account to the AWS CodeBuild service using a GitHub access token. Codebuld will build a new image for your application, and push it to a container registry.
+
+Automatic Deployment - The CodePipeline service will automatically deploy the application image to your Kubernetes cluster.
+
+Service - Kubernetes cluster will start serving the application endpoints.
+
+Project ToDos
+The current project lesson has two major parts, and each part has incremental steps to follow:
+
+Run the App locally
+
+First, you will get familiar with the Flask app by running it locally
+Next, you will containerize the same app locally so that you know the necessary environment for your (containerized) app to run. This step will make you familiar with writing a Dockerfile, building an image, and how to run a container.
+Run the App at scale on AWS Cloud
+This part aims to create a CI/CD pipeline (using AWS Codebuild and CodePipeline). The steps you will follow are:
+
+Create EKS Cluster and an IAM role
+You will start with creating an EKS cluster in your preferred region, using AWS CLI. Then, you will create an IAM role that the Codebuild will assume to access your k8s/EKS cluster. This IAM role will have the necessary access permissions, and you will also have to add this role to the k8s cluster's configMap.
+
+Create Github access token
+Next, you will generate an access-token from your Github account. You will share this token with the AWS Codebuild service (programmatically) so that it can build and test your code.
+
+Create Codebuild and CodePipeline resources using CloudFormation template
+Now, you will create the necessary AWS resources using a script, Cloudformation template (.yaml) file, available to you. These resources collectively are called stack. It will automatically create the Codebuild and Codepipeline instances for you.
+
+Build and deploy
+Finally, you will trigger the manual build (on Codebuild web console) to deploy and run the app on the K8s cluster. Besides, any GitHub check-ins will also trigger the pipeline.
+
+.
+├── Dockerfile
+├── aws-auth-patch.yml           # TODO - A sample EKS Cluster configMap file. 
+├── ci-cd-codepipeline.cfn.yml   # TODO - YAML template to create CodePipeline pipeline and CodeBuild resources
+├── buildspec.yml
+├── simple_jwt_api.yml
+├── trust.json              # TODO - Used for creating an IAM role for Codebuild
+├── iam-role-policy.json    
+├── main.py				 
+├── requirements.txt		
+└── test_main.py            # TODO - Unit Test file
+
+Most of the files needed in this project are already available to you. You will have to make changes in the following files aligned with the upcoming instructions:
+
+trust.json: This file and iam-role-policy.json file will be used for creating an IAM role for Codebuild to assume while building your code and deploying to the EKS cluster.
+
+aws-auth-patch.yml: You will create a file similar to this one after creating en EKS cluster. We have given you a sample file so that the YAML indentations will not trouble you.
+
+ci-cd-codepipeline.cfn.yml: This is the Cloudformation template that we will use to create Codebuild, Codepipeline, and related resources like IAM roles and S3 bucket. This file is almost complete, except for you to write a few parameter values specific to you. Once the Codebuild resource is created, it will run the commands mentioned in the buildspec.yml.
+
+test_main.py: You will write unit tests in this file.
+
+5 - Verifique se o Dockerfile tem o seguinte conteúdo:
+# Use the `python:3.7` as a source image from the Amazon ECR Public Gallery
+# We are not using `python:3.7.2-slim` from Dockerhub because it has put a  pull rate limit. 
+FROM public.ecr.aws/sam/build-python3.7:latest
+# Set up an app directory for your code
+COPY . /app
+WORKDIR /app
+# Install `pip` and needed Python packages from `requirements.txt`
+RUN pip install --upgrade pip
+RUN pip install -r requirements.txt
+# Define an entrypoint which will run the main app using the Gunicorn WSGI server.
+ENTRYPOINT ["gunicorn", "-b", ":8080", "main:APP"]
+
+Containers cannot read the values stored in your localhost's environment variables. Therefore, create a file named .env_file and save both JWT_SECRET and LOG_LEVEL into that .env_file. We will use this file while creating the container. Here, we do not need the export command, just an equals sign:
+JWT_SECRET='myjwtsecret'
+LOG_LEVEL=DEBUG
+
+# Create and run a container
+Create and run a container
+Create and run a container using the image locally:
+
+You can pass the name of the env file using the flag --env-file=<YOUR_ENV_FILENAME>.
+You should expose the port 8080 of the container to port 80 on your host machine.
+docker run --name myContainer --env-file=.env_file -p 80:8080 myimage
+
+# Check the endpoints
+To use the endpoints, you can use the same curl commands as before, except using port 80 this time. Open a new terminal window, and try the following command:
+
+# Flask server running inside a container
+curl --request GET 'http://localhost:80/'
+# Flask server running locally (only the port number is different)
+curl --request GET 'http://localhost:8080/'
+
+# Check the others endpoints
+# Calls the endpoint 'localhost:80/auth' with the email/password as the message body.
+# The return JWT token assigned to the environment variable 'TOKEN'
+export TOKEN=`curl --data '{"email":"abc@xyz.com","password":"WindowsPwd"}' --header "Content-Type: application/json" -X POST localhost:80/auth  | jq -r '.token'`
+echo $TOKEN
+# Decrypt the token and returns its content
+curl --request GET 'http://localhost:80/contents' -H "Authorization: Bearer ${TOKEN}" | jq .
+
+# Run the app on AWS Cloud
+The next section of the project aims to create a CI/CD pipeline. The steps you will follow are:
+
+1. Create an EKS Cluster, IAM Role for CodeBuild, and Authorize the CodeBuild
+Create an EKS Cluster - Start with creating an EKS cluster in your preferred region, using eksctl command.
+
+IAM Role for CodeBuild - Create an IAM role that the Codebuild will assume to access your k8s/EKS cluster. This IAM role will have the necessary access permissions (attached JSON policies),
+
+Authorize the CodeBuild using EKS RBAC - Add IAM Role to the Kubernetes cluster's configMap.
+
+
+2. Deployment to Kubernetes using CodePipeline and CodeBuild
+Generate a Github access token
+Cenerate an access-token from your Github account. We will share this token with the Codebuild service so that it can listen to the the repository commits.
+
+Create Codebuild and CodePipeline resources using CloudFormation template
+Create a pipeline watching for commits to your Github repository using Cloudformation template (.yaml) file.
+
+Set a Secret using AWS Parameter Store
+In order to pass your JWT secret to the app in Kubernetes securely, you will set the JWT secret using AWS parameter store.
+
+Build and deploy
+Finally, you will trigger the build based on a Github commit.
+
+AWS CLI installed and configured using the aws configure command.
+The EKSCTL and KUBECTL command-line utilities installed in your system. Check and note down the KUBECTL version, using:
+kubectl version
+Note - You must use a kubectl version within one minor version difference of your Amazon EKS cluster control plane. For example, a 1.21 kubectl client works with Kubernetes 1.20, 1.21, and 1.22 clusters.
+
+You current working directory must be:
+cd cd0157-Server-Deployment-and-Containerization
+
+1. Create an EKS (Kubernetes) Cluster
+Create - Create an EKS cluster named “simple-jwt-api” in a region of your choice:
+eksctl create cluster --name simple-jwt-api --nodes=2 --version=1.22 --instance-types=t2.medium --region=us-east-2
+Known Issue - If your default region is us-east-1, then the cluster creation may fail.
+
+The command above will take a few minutes to execute, and create the following resources:
+
+EKS cluster
+A nodegroup containing two nodes.
+You can view the cluster in the EKS cluster dashboard. If you don’t see any progress, be sure that you are viewing clusters in the same region that they are being created.
+Use a consistent kubectl version in your EKS Cluster, local machine, and later in the Codebuild's buildspec.yml file.
+Verify - After creating the cluster, check the health of your clusters nodes:
+kubectl get nodes
+
+2. Create an IAM Role for CodeBuild
+You will need an IAM role that the CodeBuild will assume to access your EKS cluster. In the previous lesson, you have already created such an IAM role with a custom trust-relationship and a policy. In case you have deleted that role, you can follow the steps below to quickly set up an IAM role. Otherwise, you can ignore the current step.
+
+Get your AWS account id::
+aws sts get-caller-identity --query Account --output text
+
+Update the trust.json(opens in a new tab) file with your AWS account id.
+{
+"Version": "2012-10-17",
+"Statement": [
+    {
+        "Effect": "Allow",
+        "Principal": {
+            "AWS": "arn:aws:iam::<ACCOUNT_ID>:root"
+        },
+        "Action": "sts:AssumeRole"
+    }
+]
+}
+Replace the <ACCOUNT_ID> with your actual AWS account ID.
+
+Create a role, 'UdacityFlaskDeployCBKubectlRole', using the trust.json trust relationship:
+aws iam create-role --role-name UdacityFlaskDeployCBKubectlRole --assume-role-policy-document file://trust.json --output text --query 'Role.Arn'
+# Returns something similar to 
+# arn:aws:iam::519002666132:role/UdacityFlaskDeployCBKubectlRole
+Policy is also a JSON file where we will define the set of permissible actions that the Codebuild can perform.
+We have given you a policy file, iam-role-policy.json(opens in a new tab), containing the following permissible actions: "eks:Describe*" and "ssm:GetParameters".
+{
+ "Version": "2012-10-17",
+ "Statement": [
+     {
+         "Effect": "Allow",
+         "Action": [
+             "eks:Describe*",
+           	 "ssm:GetParameters"
+         ],
+         "Resource": "*"
+     }
+ ]
+}
+Attach the iam-role-policy.json policy to the 'UdacityFlaskDeployCBKubectlRole' as:
+aws iam put-role-policy --role-name UdacityFlaskDeployCBKubectlRole --policy-name eks-describe --policy-document file://iam-role-policy.json
+
+3. Authorize the CodeBuild using EKS RBAC
+You will have to repeat this step every time you create a new EKS cluster.
+
+For the CodeBuild too administer the cluster, you will have to add an entry of this new role into the 'aws-auth ConfigMap'. The aws-auth ConfigMap(opens in a new tab) is used to grant role-based access control to your cluster.
+
+Fetch - Get the current configmap and save it to a file:
+# Mac/Linux - The file will be created at `/System/Volumes/Data/private/tmp/aws-auth-patch.yml` path
+kubectl get -n kube-system configmap/aws-auth -o yaml > /tmp/aws-auth-patch.yml
+# Windows - The file will be created in the current working directory
+kubectl get -n kube-system configmap/aws-auth -o yaml > aws-auth-patch.yml
+Edit - Open the aws-auth-patch.yml file using any editor, such as VS code editor:
+code /System/Volumes/Data/private/tmp/aws-auth-patch.yml
+Add the following group in the data → mapRoles section of this file. YAML is indentation-sensitive, therefore refer to the snapshot below for a correct indentation:
+
+   - groups:
+       - system:masters
+     rolearn: arn:aws:iam::<ACCOUNT_ID>:role/UdacityFlaskDeployCBKubectlRole
+     username: build
+Don't forget to replace the <ACCOUNT_ID> with your AWS account Id. Do not copy-paste the code snippet from above. Instead, look at this sample aws-auth-patch.yml(opens in a new tab) file and the snapshot below to stay careful with the indentations.
+
+## Create Codebuild and CodePipeline resources using CloudFormation template
+
+Modify the template
+There is a file named ci-cd-codepipeline.cfn.yml provided in your starter repo. This is the template file that you will use to create your CodePipeline pipeline and CodeBuild project Open this file, and go to the 'Parameters' section. These are parameters that will accept values when you create a stack. Ensure that the following values are used for the parameter variables:
+
+|Parameter|Possible Value| |---|---|---| |EksClusterName|simple-jwt-api
+Name of the EKS cluster you created | |GitSourceRepo|cd0157-Server-Deployment-and-Containerization
+Github repo name| |GitBranch|master
+Or any other you want to link to the Pipeline| |GitHubUser|Your Github username| |KubectlRoleName|UdacityFlaskDeployCBKubectlRole
+We created this role earlier|
+
+**Did you notice that we haven't saved the GitHubToken in this file?** Do not use any quotes in your values, as shown in the snapshot below. Save the changes you've made.
+
+Review the resources
+Review the resources that will be created using this ci-cd-codepipeline.cfn.yml file. The Cloudformation template file ci-cd-codepipeline.cfn.yml will create the following resources:
+
+ECR repository to store your Docker image.
+S3 bucket to store your Pipeline artifacts
+A few IAM roles that individual services will assume
+A Lambda function
+CodeBuild and CodePipeline resources
+Screenshot showing resources that will be created using the ci-cd-codepipeline.cfn.yml template
+Resources that will be created using the ci-cd-codepipeline.cfn.yml template
+
+###  Create Stack
+Use the AWS web-console to create a stack for CodePipeline using the CloudFormation template file ci-cd-codepipeline.cfn.yml. Go to the CloudFormation service(opens in a new tab) in the AWS console. Press the Create Stack button. It will make you go through the following three steps -
+
+Specify template - Choose the options "Template is ready" and "Upload a template file" to upload the template file ci-cd-codepipeline.cfn.yml. Click the 'Next' button.
+
+The Working Project
+You will not be able to trigger a manual build because the Codebuild is set to use the CodePipeline artifact. Triggering it manually may lead to this error:
+
+Build failed to start. The following error occurred: ArtifactsOverride must be set when using artifacts type CodePipelines
+
+A workaround for a manual build is: Go to the CodePipeline console → your Pipeline → click on the Release change button. However, we recommend the automatic builds. Try the steps below to test the automatic builds:
+
+Push a commit - To check if the pipeline works, Make a git push to your repository to trigger an automatic build as:
+## Verify the remote destination. 
+## It should point to the repo in your account (not the repo in the Udacity account). 
+## Otherwise, FORK the Udacity repo, and then clone it locally
+git remote -v
+## Make the changes locally
+git status
+## Add the changed file to the Git staging area
+git add <filename>
+## Provide a meaningful commit description
+git commit -m “my comment“
+## Push to the local master branch to the remote master branch
+git push
+
+Verify - In the AWS console go to the CodePipeline dashboard(opens in a new tab). You should see that the build is running, and it should succeed.
