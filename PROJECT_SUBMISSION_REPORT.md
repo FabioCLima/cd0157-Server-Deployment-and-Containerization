@@ -96,12 +96,29 @@ mapRoles:
 - **Region**: us-east-1
 - **Status**: Created successfully
 
-### 7. ✅ CI/CD Pipeline Configuration
+### 7. ✅ Unit Tests Integration
+- **Test File**: `test_main.py`
+- **Tests Configured**:
+  - `test_health()` - Validates the health endpoint returns 200 and 'Healthy'
+  - `test_auth()` - Validates authentication endpoint generates JWT token
+- **Build Integration**: Tests added to buildspec.yml pre_build phase
+- **Command**: `python -m pytest test_main.py`
+- **Purpose**: Ensures unit tests pass before build will deploy new code to cluster
+
+**buildspec.yml Configuration**:
+```yaml
+pre_build:
+  commands:
+    - pip install -r requirements.txt
+    - python -m pytest test_main.py
+```
+
+### 8. ✅ CI/CD Pipeline Configuration
 - **Pipeline Name**: `simple-jwt-api-CodePipelineGitHub-2ijCNfIeIBXp`
 - **Source Stage**: ✅ Succeeded (connected to GitHub)
 - **Build Stage**: ❌ Failed (see blocking issue below)
 
-### 8. ✅ Git Commit and Push
+### 9. ✅ Git Commit and Push
 Multiple commits were made to trigger the pipeline:
 - Commit: `c16345b` - "feat: Configure CI/CD pipeline for us-east-1"
 - Successfully pushed to GitHub
@@ -233,8 +250,9 @@ All required project components are present and functional:
 4. ✅ **GitHub Integration**: Repository connected to CodePipeline
 5. ✅ **Parameter Store**: JWT_SECRET configured
 6. ✅ **Buildspec Configuration**: Properly configured with correct kubectl version
-7. ✅ **Source Code**: All application files present and correct
-8. ✅ **Git Repository**: All changes committed and pushed
+7. ✅ **Unit Tests**: Integrated into build pipeline (pre_build phase)
+8. ✅ **Source Code**: All application files present and correct
+9. ✅ **Git Repository**: All changes committed and pushed
 
 ### What Cannot Be Demonstrated (Due to AWS Limitation)
 
